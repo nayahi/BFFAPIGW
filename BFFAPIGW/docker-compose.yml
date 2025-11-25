@@ -1,0 +1,144 @@
+version: '3.8'
+
+services:
+  # Base de datos SQL Server
+  # sqlserver:
+    # image: mcr.microsoft.com/mssql/server:2019-latest
+    # container_name: sqlserver-ecommerce
+    # environment:
+      # - ACCEPT_EULA=Y
+      # - SA_PASSWORD=YourStrong@Passw0rd
+      # - MSSQL_PID=Developer
+    # ports:
+      # - "1433:1433"
+    # volumes:
+      # - sqlserver_data:/var/opt/mssql
+    # networks:
+      # - ecommerce-network
+    # healthcheck:
+      # test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourStrong@Passw0rd -Q "SELECT 1" || exit 1
+      # interval: 10s
+      # timeout: 3s
+      # retries: 10
+      # start_period: 10s
+
+  # Servicio gRPC de Productos (puerto 7001)
+  # productservice:
+    # build:
+      # context: ../ProductService.gRPC
+      # dockerfile: Dockerfile
+    # container_name: productservice-grpc
+    # environment:
+      # - ASPNETCORE_ENVIRONMENT=Production
+      # - ASPNETCORE_URLS=http://+:7001
+      # - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=ECommerceProducts;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+    # ports:
+      # - "7001:7001"
+    # depends_on:
+      # sqlserver:
+        # condition: service_healthy
+    # networks:
+      # - ecommerce-network
+    # restart: on-failure
+    # healthcheck:
+      # test: ["CMD", "curl", "-f", "http://localhost:7001/health"]
+      # interval: 30s
+      # timeout: 10s
+      # retries: 3
+      # start_period: 40s
+
+  # Servicio gRPC de Usuarios (puerto 7002)
+  # userservice:
+    # build:
+      # context: ../UserService.gRPC
+      # dockerfile: Dockerfile
+    # container_name: userservice-grpc
+    # environment:
+      # - ASPNETCORE_ENVIRONMENT=Production
+      # - ASPNETCORE_URLS=http://+:7002
+      # - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=ECommerceUsers;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+    # ports:
+      # - "7002:7002"
+    # depends_on:
+      # sqlserver:
+        # condition: service_healthy
+    # networks:
+      # - ecommerce-network
+    # restart: on-failure
+    # healthcheck:
+      # test: ["CMD", "curl", "-f", "http://localhost:7002/health"]
+      # interval: 30s
+      # timeout: 10s
+      # retries: 3
+      # start_period: 40s
+
+  # Servicio gRPC de Pedidos (puerto 7003)
+  # orderservice:
+    # build:
+      # context: ../OrderService.gRPC
+      # dockerfile: Dockerfile
+    # container_name: orderservice-grpc
+    # environment:
+      # - ASPNETCORE_ENVIRONMENT=Production
+      # - ASPNETCORE_URLS=http://+:7003
+      # - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=ECommerceOrders;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+    # ports:
+      # - "7003:7003"
+    # depends_on:
+      # sqlserver:
+        # condition: service_healthy
+    # networks:
+      # - ecommerce-network
+    # restart: on-failure
+    # healthcheck:
+      # test: ["CMD", "curl", "-f", "http://localhost:7003/health"]
+      # interval: 30s
+      # timeout: 10s
+      # retries: 3
+      # start_period: 40s
+
+  # API Gateway (BFF) - Expone endpoints REST públicos (puerto 5000)
+  apigateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ecommerce-grpc-apigateway-bff
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:5000
+      - GrpcServices__ProductService=http://ecommerce-grpc-productservice:7001
+      - GrpcServices__UserService=http://ecommerce-grpc-userservice:7002
+      - GrpcServices__OrderService=http://ecommerce-grpc-orderservice:7003
+      - Jwt__SecretKey=MiClaveSecretaSuperSeguraParaElCursoMicroserviciosNivel2CostaRica2025
+      - Jwt__Issuer=ApiGateway.BFF
+      - Jwt__Audience=ECommerce.Clients
+      - Jwt__ExpirationHours=24
+    ports:
+      - "5000:5000"
+    # depends_on:
+      # productservice:
+        # condition: service_healthy
+      # userservice:
+        # condition: service_healthy
+      # orderservice:
+        # condition: service_healthy
+    networks:
+      - infra_microservices-network
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+networks:
+  infra_microservices-network:
+    external: true
+# networks:
+  # ecommerce-network:
+    # driver: bridge
+
+# volumes:
+  # sqlserver_data:
+    # driver: local
